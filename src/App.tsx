@@ -3,9 +3,10 @@ import { fechaPlanilla, guardarToma, listarTomas, borrarToma, nuevoId, type Toma
 import { comprimirFoto, miniatura, tipoAudioSoportado } from './media'
 import { alCambiar, sincronizar } from './sync'
 import { actualizarVariedades, codigoDesdeTexto, filtrar, leerVariedades } from './variedades'
-import { Camara, Check, Cruz, Detener, Engranaje, Galeria, Lapiz, Libreta, Mas, Microfono } from './icons'
+import { Camara, Check, Cruz, Detener, Engranaje, Galeria, Hoja, Lapiz, Libreta, Lupa, Mas, Microfono } from './icons'
+import { Revisar, Variedades, useDiario } from './Diario'
 
-type Pestana = 'nueva' | 'tomas'
+type Pestana = 'nueva' | 'variedades' | 'revisar' | 'tomas'
 
 function useConexion() {
   const [online, setOnline] = useState(navigator.onLine)
@@ -44,6 +45,9 @@ export default function App() {
   const [tomas, recargar] = useTomas()
   const enCola = tomas.filter((t) => t.estado !== 'enviada').length
   const deHoy = tomas.filter((t) => new Date(t.creadaEn).toDateString() === hoyClave()).length
+  const uso = useDiario(online)
+  const aRevisar = uso.diario.tomas.filter((t) => t.estado === 'Revisar').length
+  const [inicial, setInicial] = useState<{ v: Variedad; n: number } | null>(null)
 
   return (
     <div className="app">
@@ -67,26 +71,46 @@ export default function App() {
       <AvisoInstalar />
 
       <main>
-        {pestana === 'nueva' ? (
+        {pestana === 'nueva' && (
           <NuevaToma
+            key={inicial?.n ?? 0}
+            inicial={inicial?.v ?? null}
             alGuardar={async () => {
               await recargar()
               sincronizar()
             }}
           />
-        ) : (
-          <ListaTomas tomas={tomas} recargar={recargar} online={online} />
         )}
+        {pestana === 'variedades' && (
+          <Variedades
+            uso={uso}
+            tomarFoto={(v) => {
+              setInicial({ v, n: Date.now() })
+              setPestana('nueva')
+            }}
+          />
+        )}
+        {pestana === 'revisar' && <Revisar uso={uso} />}
+        {pestana === 'tomas' && <ListaTomas tomas={tomas} recargar={recargar} online={online} />}
       </main>
 
       <nav className="pestanas">
         <button className={pestana === 'nueva' ? 'activa' : ''} onClick={() => setPestana('nueva')}>
           <Mas size={22} />
-          Nueva toma
+          Tomar
+        </button>
+        <button className={pestana === 'variedades' ? 'activa' : ''} onClick={() => setPestana('variedades')}>
+          <Hoja size={22} />
+          Variedades
+        </button>
+        <button className={pestana === 'revisar' ? 'activa' : ''} onClick={() => setPestana('revisar')}>
+          <Lupa size={22} />
+          Revisar
+          {aRevisar > 0 && <b className="globo rojo">{aRevisar}</b>}
         </button>
         <button className={pestana === 'tomas' ? 'activa' : ''} onClick={() => setPestana('tomas')}>
           <Libreta size={22} />
-          Mis tomas
+          Enviadas
           {enCola > 0 && <b className="globo">{enCola}</b>}
         </button>
       </nav>
@@ -96,11 +120,11 @@ export default function App() {
   )
 }
 
-function NuevaToma({ alGuardar }: { alGuardar: () => void }) {
+function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Variedad | null }) {
   const [variedades, setVariedades] = useState<Variedad[]>([])
-  const [variedad, setVariedad] = useState<Variedad | null>(null)
+  const [variedad, setVariedad] = useState<Variedad | null>(inicial)
   const [eligiendo, setEligiendo] = useState(false)
-  const [campana, setCampana] = useState(() => recordar('campana') || '2026/27')
+  const [campana, setCampana] = useState(() => inicial?.campana || recordar('campana') || '2026/27')
   const [fotos, setFotos] = useState<Blob[]>([])
   const [audio, setAudio] = useState<Blob | null>(null)
   const [duracion, setDuracion] = useState(0)

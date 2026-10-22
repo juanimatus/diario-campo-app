@@ -76,3 +76,16 @@ export const Galeria = ({ size }: P) => (
     <circle cx="16" cy="8.5" r="1.5" />
   </svg>
 )
+
+export const Hoja = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M5 19c0-8 5-14 15-15-1 10-7 15-15 15zM5 19l7-7" />
+  </svg>
+)
+
+export const Lupa = ({ size }: P) => (
+  <svg {...base(size)}>
+    <circle cx="11" cy="11" r="6" />
+    <path d="M20 20l-4.5-4.5" />
+  </svg>
+)
