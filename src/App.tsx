@@ -170,7 +170,7 @@ function NuevaToma({ alGuardar }: { alGuardar: () => void }) {
         {variedad || codigoLibre ? (
           <div className="elegida">
             <div>
-              <strong>{variedad?.nombre || 'Código tipeado'}</strong>
+              <strong>{variedad ? variedad.nombre || variedad.id : 'Código tipeado'}</strong>
               <span>
                 {variedad?.id ?? codigoLibre}
                 {variedad?.cultivo ? ` · ${variedad.cultivo}` : ''}
@@ -207,7 +207,7 @@ function NuevaToma({ alGuardar }: { alGuardar: () => void }) {
                         if (v.campana) setCampana(v.campana)
                       }}
                     >
-                      <strong>{v.nombre}</strong>
+                      <strong>{v.nombre || v.id}</strong>
                       <span>
                         {v.id}
                         {v.cultivo ? ` · ${v.cultivo}` : ''}
