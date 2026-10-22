@@ -1,4 +1,4 @@
-import { leerDiario } from './_diario'
+import { leerDiario } from './_diario.js'
 
 // Variedades y tomas de la planilla, para las fichas y la bandeja de revisión.
 export async function GET() {

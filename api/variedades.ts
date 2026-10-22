@@ -1,4 +1,4 @@
-import { leerDiario } from './_diario'
+import { leerDiario } from './_diario.js'
 
 // Catálogo de variedades activas, para elegir al cargar una toma.
 export async function GET() {

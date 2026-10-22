@@ -65,3 +65,11 @@ export function fechaPlanilla(d = new Date()) {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
+
+export async function leerCache<T>(clave: string): Promise<T | undefined> {
+  return get<T>(clave, cache)
+}
+
+export async function guardarCache<T>(clave: string, valor: T) {
+  await set(clave, valor, cache)
+}
