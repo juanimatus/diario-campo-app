@@ -31,6 +31,7 @@ async function armarEnvio(t: Toma) {
     id_variedad: t.idVariedad,
     campana: t.campana,
     nota: t.nota,
+    etiqueta_escrita: t.etiquetaEscrita ?? '',
     fotos,
     audio,
   }

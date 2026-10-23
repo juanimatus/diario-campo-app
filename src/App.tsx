@@ -125,7 +125,10 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
   const [variedad, setVariedad] = useState<Variedad | null>(inicial)
   const [eligiendo, setEligiendo] = useState(false)
   const [campana, setCampana] = useState(() => inicial?.campana || recordar('campana') || '2026/27')
-  const [fotos, setFotos] = useState<Blob[]>([])
+  const [fotoEtiqueta, setFotoEtiqueta] = useState<Blob | null>(null)
+  const [muestras, setMuestras] = useState<Blob[]>([])
+  const [sinEtiqueta, setSinEtiqueta] = useState(false)
+  const [etiquetaEscrita, setEtiquetaEscrita] = useState('')
   const [audio, setAudio] = useState<Blob | null>(null)
   const [duracion, setDuracion] = useState(0)
   const [nota, setNota] = useState('')
@@ -141,13 +144,20 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
     })
   }, [])
 
-  async function agregarFotos(files: FileList | null) {
+  // La foto de la etiqueta va siempre primera: Make la usa para leer la variedad.
+  const fotos = fotoEtiqueta ? [fotoEtiqueta, ...muestras] : muestras
+
+  async function agregarFotos(files: FileList | null, destino: 'etiqueta' | 'muestra') {
     if (!files?.length) return
     setProcesando(true)
     setError('')
     try {
       const nuevas = await Promise.all(Array.from(files).map((f) => comprimirFoto(f)))
-      setFotos((prev) => [...prev, ...nuevas])
+      if (destino === 'etiqueta') {
+        setFotoEtiqueta(nuevas[0])
+        setSinEtiqueta(false)
+        if (nuevas.length > 1) setMuestras((prev) => [...prev, ...nuevas.slice(1)])
+      } else setMuestras((prev) => [...prev, ...nuevas])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo agregar la foto')
     } finally {
@@ -166,6 +176,7 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
       nombreVariedad: variedad?.nombre ?? '',
       campana,
       nota: nota.trim(),
+      etiquetaEscrita: sinEtiqueta ? etiquetaEscrita.trim() : '',
       fotos,
       audio,
       miniatura: await miniatura(fotos[0]),
@@ -175,7 +186,10 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
     })
     guardarRecuerdo('campana', campana)
     if (variedad) recordarReciente(variedad.id)
-    setFotos([])
+    setFotoEtiqueta(null)
+    setMuestras([])
+    setSinEtiqueta(false)
+    setEtiquetaEscrita('')
     setAudio(null)
     setNota('')
     setConNota(false)
@@ -188,14 +202,31 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
   }
 
   const resumen = [
-    fotos.length ? `${fotos.length} ${fotos.length === 1 ? 'foto' : 'fotos'}` : null,
+    fotoEtiqueta ? 'etiqueta' : sinEtiqueta && etiquetaEscrita.trim() ? 'etiqueta escrita' : null,
+    muestras.length ? `${muestras.length} ${muestras.length === 1 ? 'muestra' : 'muestras'}` : null,
     audio ? `audio ${mmss(duracion)}` : null,
     nota.trim() ? 'nota' : null,
   ].filter(Boolean)
 
   return (
     <div className="formulario">
-      <Fotos fotos={fotos} procesando={procesando} agregar={agregarFotos} quitar={(i) => setFotos((p) => p.filter((_, j) => j !== i))} />
+      <Etiqueta
+        foto={fotoEtiqueta}
+        procesando={procesando}
+        agregar={(f) => agregarFotos(f, 'etiqueta')}
+        quitar={() => setFotoEtiqueta(null)}
+        sinEtiqueta={sinEtiqueta}
+        setSinEtiqueta={setSinEtiqueta}
+        texto={etiquetaEscrita}
+        setTexto={setEtiquetaEscrita}
+      />
+
+      <Muestras
+        fotos={muestras}
+        procesando={procesando}
+        agregar={(f) => agregarFotos(f, 'muestra')}
+        quitar={(i) => setMuestras((p) => p.filter((_, j) => j !== i))}
+      />
 
       <section className="bloque">
         <h2>Variedad</h2>
@@ -272,7 +303,92 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
   )
 }
 
-function Fotos({
+function EntradaFoto({ agregar, galeria }: { agregar: (f: FileList | null) => void; galeria?: boolean }) {
+  return (
+    <input
+      type="file"
+      accept="image/*"
+      capture={galeria ? undefined : 'environment'}
+      multiple={galeria}
+      hidden
+      onChange={(e) => {
+        agregar(e.target.files)
+        e.target.value = ''
+      }}
+    />
+  )
+}
+
+function Etiqueta({
+  foto,
+  procesando,
+  agregar,
+  quitar,
+  sinEtiqueta,
+  setSinEtiqueta,
+  texto,
+  setTexto,
+}: {
+  foto: Blob | null
+  procesando: boolean
+  agregar: (f: FileList | null) => void
+  quitar: () => void
+  sinEtiqueta: boolean
+  setSinEtiqueta: (v: boolean) => void
+  texto: string
+  setTexto: (t: string) => void
+}) {
+  if (foto)
+    return (
+      <section className="bloque">
+        <h2>Etiqueta</h2>
+        <div className="etiqueta-lista">
+          <Miniatura blob={foto} etiqueta="Etiqueta" grande={false} quitar={quitar} />
+          <p>La IA lee la variedad de esta foto.</p>
+        </div>
+      </section>
+    )
+
+  if (sinEtiqueta)
+    return (
+      <section className="bloque">
+        <div className="bloque-cabeza">
+          <h2>Etiqueta escrita</h2>
+          <button className="texto-boton chico" onClick={() => setSinEtiqueta(false)}>
+            <Cruz size={16} /> Cancelar
+          </button>
+        </div>
+        <textarea
+          className="campo etiqueta-escrita"
+          rows={2}
+          autoFocus={!texto}
+          placeholder="Lo que diría la etiqueta. Ej.: 10, Zapallo inglés, surco 3"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+        />
+        <p className="ayuda">La IA lo lee como si fuera la etiqueta y lo pasa a la hoja de ruta.</p>
+      </section>
+    )
+
+  return (
+    <section className="bloque">
+      <h2>Etiqueta</h2>
+      <div className="etiqueta-opciones">
+        <label className={`opcion ${procesando ? 'ocupado' : ''}`}>
+          <Camara size={22} />
+          <span>Foto de la etiqueta</span>
+          <EntradaFoto agregar={agregar} />
+        </label>
+        <button className="opcion" onClick={() => setSinEtiqueta(true)}>
+          <Lapiz size={22} />
+          <span>No hay etiqueta</span>
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function Muestras({
   fotos,
   procesando,
   agregar,
@@ -283,61 +399,32 @@ function Fotos({
   agregar: (f: FileList | null) => void
   quitar: (i: number) => void
 }) {
-  const entradaCamara = (
-    <input
-      type="file"
-      accept="image/*"
-      capture="environment"
-      hidden
-      onChange={(e) => {
-        agregar(e.target.files)
-        e.target.value = ''
-      }}
-    />
-  )
-  const entradaGaleria = (
-    <input
-      type="file"
-      accept="image/*"
-      multiple
-      hidden
-      onChange={(e) => {
-        agregar(e.target.files)
-        e.target.value = ''
-      }}
-    />
-  )
-
-  if (!fotos.length)
-    return (
-      <section className="visor-vacio">
-        <label className={`disparador ${procesando ? 'ocupado' : ''}`}>
-          <span className="disparador-boton">
-            <Camara size={34} />
-          </span>
-          <strong>Sacá la foto de la etiqueta</strong>
-          <span>Que se lea bien el número</span>
-          {entradaCamara}
-        </label>
-        <label className="texto-boton">
-          <Galeria size={18} /> Elegir de la galería
-          {entradaGaleria}
-        </label>
-      </section>
-    )
-
   return (
-    <section className="visor">
-      <div className="tira">
-        {fotos.map((f, i) => (
-          <Miniatura key={i} blob={f} etiqueta={i === 0 ? 'Etiqueta' : `Muestra ${i}`} grande={i === 0} quitar={() => quitar(i)} />
-        ))}
-        <label className={`agregar ${procesando ? 'ocupado' : ''}`}>
-          <Camara size={26} />
-          <span>Muestra</span>
-          {entradaCamara}
-        </label>
-      </div>
+    <section className="bloque muestras">
+      <h2>Muestra</h2>
+      <label className={`disparador ${fotos.length ? 'con-fotos' : ''} ${procesando ? 'ocupado' : ''}`}>
+        <span className="disparador-boton">
+          <Camara size={34} />
+        </span>
+        <strong>{fotos.length ? 'Sacar otra foto de la muestra' : 'Sacá fotos de la muestra'}</strong>
+        <span>
+          {fotos.length
+            ? `${fotos.length} ${fotos.length === 1 ? 'foto sacada' : 'fotos sacadas'}`
+            : 'Planta, fruto u hoja. Podés sacar varias.'}
+        </span>
+        <EntradaFoto agregar={agregar} />
+      </label>
+      {fotos.length > 0 && (
+        <div className="tira">
+          {fotos.map((f, i) => (
+            <Miniatura key={i} blob={f} etiqueta={`Muestra ${i + 1}`} grande={false} quitar={() => quitar(i)} />
+          ))}
+        </div>
+      )}
+      <label className="texto-boton">
+        <Galeria size={18} /> Elegir de la galería
+        <EntradaFoto agregar={agregar} galeria />
+      </label>
     </section>
   )
 }

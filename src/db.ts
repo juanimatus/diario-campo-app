@@ -10,6 +10,7 @@ export interface Toma {
   nombreVariedad: string
   campana: string
   nota: string
+  etiquetaEscrita?: string
   fotos: Blob[]
   audio: Blob | null
   miniatura: string
