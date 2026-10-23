@@ -89,3 +89,9 @@ export const Lupa = ({ size }: P) => (
     <path d="M20 20l-4.5-4.5" />
   </svg>
 )
+
+export const Basura = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+  </svg>
+)

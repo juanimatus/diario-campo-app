@@ -5,6 +5,7 @@ import { alCambiar, sincronizar } from './sync'
 import { actualizarVariedades, codigoDesdeTexto, filtrar, leerVariedades } from './variedades'
 import { Camara, Check, Cruz, Detener, Engranaje, Galeria, Hoja, Lapiz, Libreta, Lupa, Mas, Microfono } from './icons'
 import { Revisar, Variedades, useDiario } from './Diario'
+import { alVencerSesion, cerrarSesion, confirmarCodigo, consultarSesion, correoGuardado, pedirCodigo } from './sesion'
 
 type Pestana = 'nueva' | 'variedades' | 'revisar' | 'tomas'
 
@@ -38,10 +39,140 @@ function useTomas() {
 
 const hoyClave = () => new Date().toDateString()
 
+// Sin sesión se muestra la pantalla de acceso. Sin señal se deja entrar a quien ya había
+// entrado en este teléfono, para que pueda seguir cargando tomas en el campo.
 export default function App() {
+  const online = useConexion()
+  const [correo, setCorreo] = useState<string | null | undefined>(() => correoGuardado() || undefined)
+
+  useEffect(() => {
+    if (!online) return
+    consultarSesion()
+      .then(setCorreo)
+      .catch(() => setCorreo((c) => c ?? null))
+  }, [online])
+  useEffect(() => alVencerSesion(() => setCorreo(null)), [])
+
+  if (correo === undefined && online) return <div className="app cargando-sesion" />
+  if (!correo)
+    return (
+      <Acceso
+        online={online}
+        entrar={(c) => {
+          setCorreo(c)
+          sincronizar()
+        }}
+      />
+    )
+  return <Principal correo={correo} online={online} salir={() => setCorreo(null)} />
+}
+
+function Acceso({ online, entrar }: { online: boolean; entrar: (correo: string) => void }) {
+  const [correo, setCorreo] = useState(() => recordar('ultimo-correo'))
+  const [desafio, setDesafio] = useState('')
+  const [codigo, setCodigo] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [error, setError] = useState('')
+
+  async function pedir() {
+    setEnviando(true)
+    setError('')
+    try {
+      setDesafio(await pedirCodigo(correo.trim()))
+      guardarRecuerdo('ultimo-correo', correo.trim())
+      setCodigo('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo mandar el código')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  async function confirmar() {
+    setEnviando(true)
+    setError('')
+    try {
+      entrar(await confirmarCodigo(desafio, codigo))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo entrar')
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <div className="acceso">
+      <div className="acceso-marca">
+        <span className="acceso-icono">
+          <Hoja size={30} />
+        </span>
+        <h1>Diario de Campo</h1>
+        <p>Acceso solo para el equipo del ensayo.</p>
+      </div>
+      {!online ? (
+        <p className="aviso-pendientes">Necesitás señal para entrar la primera vez. Después funciona sin señal.</p>
+      ) : !desafio ? (
+        <form
+          className="acceso-form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (correo.includes('@')) pedir()
+          }}
+        >
+          <label className="etiqueta">
+            Tu correo
+            <input
+              className="campo"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoFocus
+              placeholder="nombre@correo.com"
+              value={correo}
+              onChange={(e) => setCorreo(e.target.value)}
+            />
+          </label>
+          {error && <p className="error">{error}</p>}
+          <button className="guardar" disabled={enviando || !correo.includes('@')}>
+            {enviando ? 'Enviando…' : 'Mandarme un código'}
+          </button>
+        </form>
+      ) : (
+        <form
+          className="acceso-form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (codigo.length === 6) confirmar()
+          }}
+        >
+          <p className="ayuda">
+            Te mandamos un código de 6 números a <b>{correo}</b>. Vence en 10 minutos.
+          </p>
+          <input
+            className="campo codigo"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            maxLength={6}
+            placeholder="000000"
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          />
+          {error && <p className="error">{error}</p>}
+          <button className="guardar" disabled={enviando || codigo.length !== 6}>
+            {enviando ? 'Entrando…' : 'Entrar'}
+          </button>
+          <button type="button" className="texto-boton" onClick={() => setDesafio('')} disabled={enviando}>
+            Usar otro correo o pedir otro código
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+
+function Principal({ correo, online, salir }: { correo: string; online: boolean; salir: () => void }) {
   const [pestana, setPestana] = useState<Pestana>('nueva')
   const [ajustes, setAjustes] = useState(false)
-  const online = useConexion()
   const [tomas, recargar] = useTomas()
   const enCola = tomas.filter((t) => t.estado !== 'enviada').length
   const deHoy = tomas.filter((t) => new Date(t.creadaEn).toDateString() === hoyClave()).length
@@ -115,7 +246,16 @@ export default function App() {
         </button>
       </nav>
 
-      {ajustes && <Ajustes cerrar={() => setAjustes(false)} />}
+      {ajustes && (
+        <Ajustes
+          correo={correo}
+          cerrar={() => setAjustes(false)}
+          salir={async () => {
+            await cerrarSesion()
+            salir()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -760,8 +900,7 @@ function AvisoInstalar() {
   )
 }
 
-function Ajustes({ cerrar }: { cerrar: () => void }) {
-  const [pin, setPin] = useState(() => recordar('pin'))
+function Ajustes({ correo, cerrar, salir }: { correo: string; cerrar: () => void; salir: () => void }) {
   const [msj, setMsj] = useState('')
   return (
     <div className="fondo" onClick={cerrar}>
@@ -772,10 +911,10 @@ function Ajustes({ cerrar }: { cerrar: () => void }) {
             <Cruz size={22} />
           </button>
         </div>
-        <label className="fila">
-          <span>PIN de envío</span>
-          <input className="campo corto" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} />
-        </label>
+        <p className="fila">
+          <span>Sesión</span>
+          <b className="correo-sesion">{correo}</b>
+        </p>
         <button
           className="secundario"
           onClick={async () => {
@@ -792,14 +931,12 @@ function Ajustes({ cerrar }: { cerrar: () => void }) {
         </button>
         {msj && <p className="ayuda">{msj}</p>}
         <button
-          className="guardar"
+          className="texto-boton peligro"
           onClick={() => {
-            guardarRecuerdo('pin', pin.trim())
-            sincronizar()
-            cerrar()
+            if (confirm('¿Cerrar sesión en este teléfono? Las tomas sin enviar quedan guardadas.')) salir()
           }}
         >
-          Guardar ajustes
+          Cerrar sesión
         </button>
       </div>
     </div>

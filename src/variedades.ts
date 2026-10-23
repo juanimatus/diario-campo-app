@@ -1,7 +1,9 @@
+import { sesionVencida } from './sesion'
 import { leerVariedades, guardarVariedades, type Variedad } from './db'
 
 export async function actualizarVariedades(): Promise<Variedad[]> {
   const r = await fetch('/api/variedades', { cache: 'no-store' })
+  if (r.status === 401) sesionVencida()
   if (!r.ok) throw new Error(`No se pudo traer la lista (${r.status})`)
   const lista = (await r.json()) as Variedad[]
   lista.sort((a, b) => a.id.localeCompare(b.id))

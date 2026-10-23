@@ -1,5 +1,8 @@
 import { listarTomas, guardarToma, type Toma } from './db'
 import { blobABase64, extensionAudio } from './media'
+import { sesionVencida } from './sesion'
+
+class SinSesion extends Error {}
 
 let corriendo = false
 const oyentes = new Set<() => void>()
@@ -10,13 +13,6 @@ export function alCambiar(fn: () => void) {
 }
 const avisar = () => oyentes.forEach((fn) => fn())
 
-export function pin() {
-  try {
-    return localStorage.getItem('pin') ?? ''
-  } catch {
-    return ''
-  }
-}
 
 async function armarEnvio(t: Toma) {
   const fotos = await Promise.all(
@@ -43,11 +39,14 @@ async function enviar(t: Toma) {
   try {
     const r = await fetch('/api/toma', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-app-pin': pin() },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(await armarEnvio(t)),
       signal: ctrl.signal,
     })
-    if (r.status === 401) throw new Error('PIN incorrecto: cargalo en Ajustes')
+    if (r.status === 401) {
+      sesionVencida()
+      throw new SinSesion('Iniciá sesión para enviar')
+    }
     if (!r.ok) throw new Error(`El servidor respondió ${r.status}`)
   } finally {
     clearTimeout(corte)
@@ -71,9 +70,9 @@ export async function sincronizar() {
         await guardarToma({ ...t, estado: 'enviada', error: undefined, fotos: [], audio: null, enviadaEn: new Date().toISOString() })
       } catch (e) {
         const msj = e instanceof Error ? (e.name === 'AbortError' ? 'Se cortó la conexión' : e.message) : String(e)
-        await guardarToma({ ...t, estado: 'error', error: msj })
+        await guardarToma({ ...t, estado: e instanceof SinSesion ? 'pendiente' : 'error', error: msj })
         avisar()
-        if (!navigator.onLine) break
+        if (!navigator.onLine || e instanceof SinSesion) break
         continue
       }
       avisar()

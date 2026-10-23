@@ -251,7 +251,7 @@ a.secundario { display: block; text-align: center; text-decoration: none; }
 .cron-cabeza span:not(.chip) { flex: 1; font-size: 14px; color: var(--suave); }
 .cron-voz { font-size: 15px; }
 .cron-voz b { color: var(--suave); font-weight: 600; }
-.cron-pie { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cron-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
 .cron-pie a { color: var(--campo); font-weight: 600; font-size: 15px; }
 
 .aviso-pendientes { padding: 10px 14px; border-radius: 12px; background: #fbefd0; color: #5c4108; font-size: 15px; }
@@ -262,3 +262,16 @@ a.secundario { display: block; text-align: center; text-decoration: none; }
 .etiqueta { display: grid; gap: 4px; font-size: 14px; color: var(--suave); }
 .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .resultados button:disabled { opacity: .5; }
+
+/* Acceso */
+.cargando-sesion { min-height: 100vh; background: var(--papel); }
+.acceso { min-height: 100vh; max-width: 420px; margin: 0 auto; padding: calc(48px + env(safe-area-inset-top)) 20px 32px; display: grid; align-content: start; gap: 28px; }
+.acceso-marca { display: grid; justify-items: start; gap: 6px; }
+.acceso-icono { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; background: var(--estaca); color: var(--tinta); }
+.acceso-marca h1 { margin: 10px 0 0; font-family: var(--display); font-size: 36px; font-weight: 700; }
+.acceso-marca p { margin: 0; color: var(--suave); }
+.acceso-form { display: grid; gap: 14px; }
+.campo.codigo { font-family: var(--display); font-size: 34px; letter-spacing: .35em; text-align: center; font-weight: 700; }
+.correo-sesion { font-weight: 600; overflow-wrap: anywhere; }
+.peligro { color: #b3261e !important; }
+.barra-acciones { display: flex; gap: 14px; align-items: center; }

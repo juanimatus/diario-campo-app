@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { actualizarDiario, diarioGuardado, enviarAccion, fechaHojaAMs, type Diario, type TomaHoja, type VariedadHoja } from './diario'
 import { codigoDesdeTexto } from './variedades'
-import { Camara, Cruz, Lapiz, Mas } from './icons'
+import { Basura, Camara, Cruz, Lapiz, Mas } from './icons'
 
 export function useDiario(online: boolean) {
   const [diario, setDiario] = useState<Diario>({ variedades: [], tomas: [], actualizado: '' })
@@ -40,7 +40,14 @@ export function useDiario(online: boolean) {
     })
   }
 
-  return { diario, cargando, error, actualizar, cambiarToma, cambiarVariedad }
+  function quitarToma(id: string) {
+    setDiario((d) => ({ ...d, tomas: d.tomas.filter((t) => t.id !== id) }))
+  }
+  function quitarVariedad(id: string) {
+    setDiario((d) => ({ ...d, variedades: d.variedades.filter((v) => v.id !== id) }))
+  }
+
+  return { diario, cargando, error, actualizar, cambiarToma, cambiarVariedad, quitarToma, quitarVariedad }
 }
 
 type UsoDiario = ReturnType<typeof useDiario>
@@ -171,15 +178,42 @@ function Ficha({
   uso: UsoDiario
 }) {
   const orden = [...tomas].sort((a, b) => fechaHojaAMs(b.fecha) - fechaHojaAMs(a.fecha))
+  const [cambiando, setCambiando] = useState<TomaHoja | null>(null)
+  const [borrando, setBorrando] = useState(false)
+
+  async function eliminar() {
+    if (tomas.length) {
+      alert(
+        `${variedad.id} tiene ${tomas.length} ${tomas.length === 1 ? 'toma' : 'tomas'}. Borralas o cambiales la variedad antes de eliminarla.`,
+      )
+      return
+    }
+    if (!confirm(`¿Eliminar ${variedad.id} ${variedad.nombre}? Se borra de la planilla y su carpeta va a la papelera de Drive.`)) return
+    setBorrando(true)
+    try {
+      await enviarAccion({ accion: 'borrar_variedad', id_variedad: variedad.id })
+      uso.quitarVariedad(variedad.id)
+      cerrar()
+    } catch (e) {
+      setBorrando(false)
+      alert(e instanceof Error ? e.message : 'No se pudo eliminar')
+    }
+  }
+
   return (
     <div className="pantalla">
       <div className="pantalla-barra">
         <button className="icono oscuro" onClick={cerrar} aria-label="Volver">
           <Cruz size={22} />
         </button>
-        <button className="link-chico" onClick={editar} disabled={!navigator.onLine}>
-          <Lapiz size={16} /> Editar
-        </button>
+        <div className="barra-acciones">
+          <button className="link-chico peligro" onClick={eliminar} disabled={borrando || !navigator.onLine}>
+            <Basura size={16} /> {borrando ? 'Eliminando…' : 'Eliminar'}
+          </button>
+          <button className="link-chico" onClick={editar} disabled={!navigator.onLine}>
+            <Lapiz size={16} /> Editar
+          </button>
+        </div>
       </div>
       <div className="pantalla-cuerpo">
         <div className="estaca ficha-estaca">
@@ -221,15 +255,27 @@ function Ficha({
         {orden.length === 0 && <p className="ayuda">Todavía no hay tomas procesadas de esta variedad.</p>}
         <ol className="cronologia">
           {orden.map((t) => (
-            <TomaFicha key={t.id} t={t} uso={uso} />
+            <TomaFicha key={t.id} t={t} uso={uso} cambiar={() => setCambiando(t)} />
           ))}
         </ol>
       </div>
+      {cambiando && (
+        <AsignarVariedad
+          toma={cambiando}
+          variedades={uso.diario.variedades.filter((v) => v.activa && v.id !== variedad.id)}
+          cambio
+          cerrar={() => setCambiando(null)}
+          listo={(id) => {
+            uso.cambiarToma(cambiando.id, { variedad: id, estado: 'Pendiente', nro: '', carpeta: '' })
+            setCambiando(null)
+          }}
+        />
+      )}
     </div>
   )
 }
 
-function TomaFicha({ t, uso }: { t: TomaHoja; uso: UsoDiario }) {
+function TomaFicha({ t, uso, cambiar }: { t: TomaHoja; uso: UsoDiario; cambiar: () => void }) {
   return (
     <li>
       <div className="cron-cabeza">
@@ -237,6 +283,11 @@ function TomaFicha({ t, uso }: { t: TomaHoja; uso: UsoDiario }) {
         <span>{t.fecha.slice(0, 16)}</span>
         <EstadoHoja estado={t.estado} />
       </div>
+      {t.etiquetaEscrita && (
+        <p className="cron-voz">
+          <b>Etiqueta escrita:</b> {t.textoEtiqueta || t.etiquetaEscrita}
+        </p>
+      )}
       {t.observacion && <p>{t.observacion}</p>}
       {t.transcripcion && (
         <p className="cron-voz">
@@ -255,8 +306,36 @@ function TomaFicha({ t, uso }: { t: TomaHoja; uso: UsoDiario }) {
           </a>
         )}
         {t.estado !== 'Pendiente' && <BotonReprocesar t={t} uso={uso} />}
+        <button className="link-chico" onClick={cambiar} disabled={!navigator.onLine}>
+          Cambiar variedad
+        </button>
+        <BotonBorrar t={t} uso={uso} />
       </div>
     </li>
+  )
+}
+
+function BotonBorrar({ t, uso }: { t: TomaHoja; uso: UsoDiario }) {
+  const [borrando, setBorrando] = useState(false)
+  return (
+    <button
+      className="link-chico peligro"
+      disabled={borrando || !navigator.onLine}
+      onClick={async () => {
+        const cual = t.nro ? `la toma ${t.nro}` : 'esta toma'
+        if (!confirm(`¿Borrar ${cual} del ${t.fecha.slice(0, 10)}? Se saca de la planilla y sus fotos y audio van a la papelera de Drive.`)) return
+        setBorrando(true)
+        try {
+          await enviarAccion({ accion: 'borrar_toma', id_toma: t.id })
+          uso.quitarToma(t.id)
+        } catch (e) {
+          setBorrando(false)
+          alert(e instanceof Error ? e.message : 'No se pudo borrar')
+        }
+      }}
+    >
+      {borrando ? 'Borrando…' : 'Borrar'}
+    </button>
   )
 }
 
@@ -322,6 +401,7 @@ export function Revisar({ uso }: { uso: UsoDiario }) {
                   Asignar variedad
                 </button>
                 <BotonReprocesar t={t} uso={uso} />
+                <BotonBorrar t={t} uso={uso} />
               </div>
             </li>
           ))}
@@ -345,15 +425,17 @@ export function Revisar({ uso }: { uso: UsoDiario }) {
 function AsignarVariedad({
   toma,
   variedades,
+  cambio,
   cerrar,
   listo,
 }: {
   toma: TomaHoja
   variedades: VariedadHoja[]
+  cambio?: boolean
   cerrar: () => void
   listo: (id: string) => void
 }) {
-  const [q, setQ] = useState(toma.idLeido.replace('VAR-', ''))
+  const [q, setQ] = useState(cambio ? '' : toma.idLeido.replace('VAR-', ''))
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
   const t = q.trim().toLowerCase()
@@ -378,13 +460,15 @@ function AsignarVariedad({
     <div className="fondo" onClick={cerrar}>
       <div className="hoja alta" onClick={(e) => e.stopPropagation()}>
         <div className="hoja-cabeza">
-          <h2>Asignar variedad</h2>
+          <h2>{cambio ? 'Cambiar variedad' : 'Asignar variedad'}</h2>
           <button className="icono oscuro" onClick={cerrar} aria-label="Cerrar">
             <Cruz size={22} />
           </button>
         </div>
         <p className="ayuda">
-          La IA leyó «{toma.textoEtiqueta || 'nada legible'}». Elegí la variedad y la toma se vuelve a procesar.
+          {cambio
+            ? `Ahora está en ${toma.variedad}. Elegí la correcta: las fotos copiadas van a la papelera y la toma se vuelve a procesar en la variedad nueva.`
+            : `La IA leyó «${toma.textoEtiqueta || 'nada legible'}». Elegí la variedad y la toma se vuelve a procesar.`}
         </p>
         <input className="campo" type="search" autoFocus placeholder="Número o nombre" value={q} onChange={(e) => setQ(e.target.value)} />
         {error && <p className="error">{error}</p>}

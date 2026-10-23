@@ -28,6 +28,7 @@ export interface TomaHoja {
   carpeta: string
   procesadoEn: string
   error: string
+  etiquetaEscrita: string
 }
 
 export async function leerDiario(): Promise<{ variedades: VariedadHoja[]; tomas: TomaHoja[] }> {
@@ -52,9 +53,9 @@ export async function leerDiario(): Promise<{ variedades: VariedadHoja[]; tomas:
         notas: notas ?? '',
       })
     } else if (tipo === 'T' && c[0]) {
-      const [id, variedad, campana, nro, fecha, dictado, idLeido, coincide, textoEtiqueta, transcripcion, observacion, estado, carpeta, procesadoEn, error] =
+      const [id, variedad, campana, nro, fecha, dictado, idLeido, coincide, textoEtiqueta, transcripcion, observacion, estado, carpeta, procesadoEn, error, etiquetaEscrita] =
         c.map((x) => x ?? '')
-      tomas.push({ id, variedad, campana, nro, fecha, dictado, idLeido, coincide, textoEtiqueta, transcripcion, observacion, estado, carpeta, procesadoEn, error })
+      tomas.push({ id, variedad, campana, nro, fecha, dictado, idLeido, coincide, textoEtiqueta, transcripcion, observacion, estado, carpeta, procesadoEn, error, etiquetaEscrita: etiquetaEscrita ?? '' })
     }
   }
   variedades.sort((a, b) => a.id.localeCompare(b.id))
