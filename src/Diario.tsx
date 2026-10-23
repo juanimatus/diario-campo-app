@@ -299,6 +299,11 @@ function TomaFicha({ t, uso, cambiar }: { t: TomaHoja; uso: UsoDiario; cambiar: 
           <b>Nota escrita:</b> {t.dictado}
         </p>
       )}
+      {t.notasMano && (
+        <p className="cron-voz notas-mano">
+          <b>Notas a mano:</b> {t.notasMano}
+        </p>
+      )}
       <div className="cron-pie">
         {t.carpeta && (
           <a href={t.carpeta} target="_blank" rel="noreferrer">

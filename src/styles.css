@@ -275,3 +275,4 @@ a.secundario { display: block; text-align: center; text-decoration: none; }
 .correo-sesion { font-weight: 600; overflow-wrap: anywhere; }
 .peligro { color: #b3261e !important; }
 .barra-acciones { display: flex; gap: 14px; align-items: center; }
+.notas-mano { white-space: pre-line; }

@@ -21,6 +21,9 @@ async function armarEnvio(t: Toma) {
   const audio = t.audio
     ? { nombre: `${t.id}_audio.${extensionAudio(t.audio.type)}`, base64: await blobABase64(t.audio) }
     : null
+  const notas = await Promise.all(
+    (t.notasMano ?? []).map(async (f, i) => ({ nombre: `${t.id}_nota${i + 1}.jpg`, base64: await blobABase64(f) })),
+  )
   return {
     id: t.id,
     fecha: t.fecha,
@@ -29,6 +32,7 @@ async function armarEnvio(t: Toma) {
     nota: t.nota,
     etiqueta_escrita: t.etiquetaEscrita ?? '',
     fotos,
+    notas_mano: notas,
     audio,
   }
 }
@@ -67,7 +71,7 @@ export async function sincronizar() {
       try {
         await enviar(t)
         // Ya está en Drive: se liberan fotos y audio del teléfono y queda la miniatura.
-        await guardarToma({ ...t, estado: 'enviada', error: undefined, fotos: [], audio: null, enviadaEn: new Date().toISOString() })
+        await guardarToma({ ...t, estado: 'enviada', error: undefined, fotos: [], notasMano: [], audio: null, enviadaEn: new Date().toISOString() })
       } catch (e) {
         const msj = e instanceof Error ? (e.name === 'AbortError' ? 'Se cortó la conexión' : e.message) : String(e)
         await guardarToma({ ...t, estado: e instanceof SinSesion ? 'pendiente' : 'error', error: msj })

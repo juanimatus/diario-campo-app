@@ -269,6 +269,7 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
   const [muestras, setMuestras] = useState<Blob[]>([])
   const [sinEtiqueta, setSinEtiqueta] = useState(false)
   const [etiquetaEscrita, setEtiquetaEscrita] = useState('')
+  const [notasMano, setNotasMano] = useState<Blob[]>([])
   const [audio, setAudio] = useState<Blob | null>(null)
   const [duracion, setDuracion] = useState(0)
   const [nota, setNota] = useState('')
@@ -287,13 +288,17 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
   // La foto de la etiqueta va siempre primera: Make la usa para leer la variedad.
   const fotos = fotoEtiqueta ? [fotoEtiqueta, ...muestras] : muestras
 
-  async function agregarFotos(files: FileList | null, destino: 'etiqueta' | 'muestra') {
+  async function agregarFotos(files: FileList | null, destino: 'etiqueta' | 'muestra' | 'notas') {
     if (!files?.length) return
     setProcesando(true)
     setError('')
     try {
-      const nuevas = await Promise.all(Array.from(files).map((f) => comprimirFoto(f)))
-      if (destino === 'etiqueta') {
+      // Las notas van con más resolución para que la IA lea bien la letra.
+      const nuevas = await Promise.all(
+        Array.from(files).map((f) => (destino === 'notas' ? comprimirFoto(f, 2000, 0.8) : comprimirFoto(f))),
+      )
+      if (destino === 'notas') setNotasMano((prev) => [...prev, ...nuevas])
+      else if (destino === 'etiqueta') {
         setFotoEtiqueta(nuevas[0])
         setSinEtiqueta(false)
         if (nuevas.length > 1) setMuestras((prev) => [...prev, ...nuevas.slice(1)])
@@ -318,6 +323,7 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
       nota: nota.trim(),
       etiquetaEscrita: sinEtiqueta ? etiquetaEscrita.trim() : '',
       fotos,
+      notasMano,
       audio,
       miniatura: await miniatura(fotos[0]),
       cantFotos: fotos.length,
@@ -330,6 +336,7 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
     setMuestras([])
     setSinEtiqueta(false)
     setEtiquetaEscrita('')
+    setNotasMano([])
     setAudio(null)
     setNota('')
     setConNota(false)
@@ -346,6 +353,7 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
     muestras.length ? `${muestras.length} ${muestras.length === 1 ? 'muestra' : 'muestras'}` : null,
     audio ? `audio ${mmss(duracion)}` : null,
     nota.trim() ? 'nota' : null,
+    notasMano.length ? `${notasMano.length} ${notasMano.length === 1 ? 'nota a mano' : 'notas a mano'}` : null,
   ].filter(Boolean)
 
   return (
@@ -405,6 +413,24 @@ function NuevaToma({ alGuardar, inicial }: { alGuardar: () => void; inicial: Var
             <Lapiz size={18} /> Escribir una nota
           </button>
         )}
+        {notasMano.length > 0 && (
+          <div className="tira">
+            {notasMano.map((f, i) => (
+              <Miniatura
+                key={i}
+                blob={f}
+                etiqueta={`Notas ${i + 1}`}
+                grande={false}
+                quitar={() => setNotasMano((p) => p.filter((_, j) => j !== i))}
+              />
+            ))}
+          </div>
+        )}
+        <label className={`texto-boton ${procesando ? 'ocupado' : ''}`}>
+          <Libreta size={18} /> {notasMano.length ? 'Sacar otra foto de notas' : 'Foto de notas a mano'}
+          <EntradaFoto agregar={(f) => agregarFotos(f, 'notas')} />
+        </label>
+        {notasMano.length > 0 && <p className="ayuda">La IA transcribe el texto y lo pasa a la planilla y a la hoja de ruta.</p>}
       </section>
 
       {error && <p className="error">{error}</p>}
